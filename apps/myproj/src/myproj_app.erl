@@ -7,7 +7,9 @@
 
 -behaviour(application).
 
--export([start/2, stop/1]).
+-export([start/2, stop/1, hello/0]).
+
+hello() -> "Hello World".
 
 start(_StartType, _StartArgs) ->
     myproj_sup:start_link().
