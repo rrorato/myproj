@@ -1,9 +1,9 @@
 %%%-------------------------------------------------------------------
-%% @doc myproj top level supervisor.
+%% @doc server top level supervisor.
 %% @end
 %%%-------------------------------------------------------------------
 
--module(myproj_sup).
+-module(server_sup).
 
 -behaviour(supervisor).
 
