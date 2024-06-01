@@ -36,8 +36,8 @@ handle(Socket) ->
         {tcp, Socket, Msg} ->
             %io:format("Recieved: ~p~n", [Msg]),
             Res = parse_input(Msg),
-            %io:format("Sending: ~p~n", [Res]),
-            gen_tcp:send(Socket, Res),
+            ResEncoded = jsx:encode(Res),
+            gen_tcp:send(Socket, ResEncoded),
             handle(Socket)
     end.
 
@@ -45,16 +45,16 @@ parse_input(ActionInfo) ->
     ActionInfoParsed = jsx:decode(ActionInfo),
     case is_valid_action_info(ActionInfoParsed) of
         false ->
-            {error, formatError};
+            #{<<"state">> => <<"error">>, <<"why">> => <<"badRequest">>};
         true ->
             Name = maps:get(<<"name">>, ActionInfoParsed),
             case ets:lookup(allowedUsers, Name) of
                 [] ->
-                    {error, userNotAllowedError};
+                    #{<<"state">> => <<"error">>, <<"why">> => <<"userNotAllowedError">>};
                 [_] ->
                     Action = maps:get(<<"action">>, ActionInfoParsed),
                     ActionSpecs = maps:get(<<"actionSpecs">>, ActionInfoParsed),
-                    action(Name, Action, ActionSpecs)
+                    handle_action(Name, Action, ActionSpecs)
             end
     end.
 
@@ -65,6 +65,6 @@ is_valid_action_info(ActionInfo) when is_map(ActionInfo) ->
 is_valid_action_info(_) ->
     false.
 
-action(Name, Action, ActionSpecs) ->
-    io:format("TAKING ACTION: ~n", []),
-    "actionDone".
+handle_action(_Name, _Action, _ActionSpecs) ->
+    io:format("~p taking unknown action ~p with options ~p ~n", [_Name, _Action, _ActionSpecs]),
+    #{<<"state">> => <<"ok">>}.
