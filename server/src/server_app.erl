@@ -15,6 +15,7 @@ start_server() ->
     ets:new(allowedUsers, [named_table, protected, set, {keypos, 1}]),
     ets:insert(allowedUsers, {<<"riccardo">>, allowed}),
     ets:insert(allowedUsers, {<<"alessandro">>, allowed}),
+    room_actions:init(),
     Pid = spawn_link(fun() ->
         {ok, Listen} = gen_tcp:listen(8080, [binary, {active, false}]),
         spawn(fun() -> acceptor(Listen) end),
@@ -54,7 +55,8 @@ parse_input(ActionInfo) ->
                 [_] ->
                     Action = maps:get(<<"action">>, ActionInfoParsed),
                     ActionSpecs = maps:get(<<"actionSpecs">>, ActionInfoParsed),
-                    handle_action(Name, Action, ActionSpecs)
+                    user_session:start(Name),
+                    room_actions:handle_action(Name, Action, ActionSpecs)
             end
     end.
 
@@ -64,7 +66,3 @@ is_valid_action_info(ActionInfo) when is_map(ActionInfo) ->
     maps:is_key(<<"actionSpecs">>, ActionInfo);
 is_valid_action_info(_) ->
     false.
-
-handle_action(_Name, _Action, _ActionSpecs) ->
-    io:format("~p taking unknown action ~p with options ~p ~n", [_Name, _Action, _ActionSpecs]),
-    #{<<"state">> => <<"ok">>}.

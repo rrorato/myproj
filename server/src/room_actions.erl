@@ -1,56 +1,70 @@
 -module(room_actions).
 
-% -export([init/0, handle_action/3]).
+-export([init/0, handle_action/3, register_user/2]).
 
-% init() ->
-%     ets:new(rooms, [named_table, protected, set, {keypos, 1}]),
-%     ets:new(user_rooms, [bag, protected]).
+init() ->
+    ets:new(rooms, [named_table, public, set, {keypos, 1}]),
+    ets:new(user_rooms, [named_table, public, set]),
+    ets:new(userPIDs, [named_table, public, set, {keypos, 1}]).
 
-% handle_action(Name, <<"createRoom">>, #{<<"room">> := Room}) ->
-%     ets:insert_new(rooms, {Room, Name, []}),
-%     {ok, roomCreated};
+% This function registers a user with their PID
+register_user(User, Pid) ->
+    ets:insert(userPIDs, {User, Pid}).
 
-% handle_action(Name, <<"destroyRoom">>, #{<<"room">> := Room}) ->
-%     case ets:lookup(rooms, Room) of
-%         [{Room, Name, _}] ->
-%             ets:delete(rooms, Room),
-%             ets:delete(user_rooms, {Room, '_'}),
-%             {ok, roomDestroyed};
-%         _ ->
-%             {error, notAllowed}
-%     end;
+handle_action(Name, <<"createRoom">>, #{<<"room">> := Room}) ->
+    io:format("~p created room ~p with options~n", [Name, Room]),
+    ets:insert_new(rooms, {Room, Name, []}),
+    #{<<"state">> => <<"ok">>, <<"info">> => <<"roomCreated">>};
 
-% handle_action(_Name, <<"listRooms">>, _) ->
-%     Rooms = ets:tab2list(rooms),
-%     RoomNames = [Room || {Room, _, _} <- Rooms],
-%     {ok, RoomNames};
+handle_action(Name, <<"destroyRoom">>, #{<<"room">> := Room}) ->
+    case ets:lookup(rooms, Room) of
+        [{Room, Name, _}] ->
+            ets:delete(rooms, Room),
+            ets:delete(user_rooms, {Room, Name}),
+            #{<<"state">> => <<"ok">>, <<"info">> => <<"roomDestroyed">>};
+        _ ->
+            #{<<"state">> => <<"error">>, <<"why">> => <<"notAllowed">>}
+    end;
 
-% handle_action(Name, <<"joinRoom">>, #{<<"room">> := Room}) ->
-%     case ets:lookup(rooms, Room) of
-%         [{Room, _, _}] ->
-%             ets:insert(user_rooms, {Room, Name}),
-%             {ok, joinedRoom};
-%         [] ->
-%             {error, roomNotFound}
-%     end;
+handle_action(_Name, <<"listRooms">>, _) ->
+    Rooms = ets:tab2list(rooms),
+    RoomNames = [Room || {Room, _, _} <- Rooms],
+    RoomNamesString = lists:flatten(io_lib:format("~p", [RoomNames])),
+    RoomNamesBinary = iolist_to_binary(RoomNamesString),
+    #{<<"state">> => <<"ok">>, <<"roomNames">> => RoomNamesBinary};
 
-% handle_action(Name, <<"leaveRoom">>, #{<<"room">> := Room}) ->
-%     ets:delete_object(user_rooms, {Room, Name}),
-%     {ok, leftRoom};
+handle_action(Name, <<"joinRoom">>, #{<<"room">> := Room}) ->
+    case ets:lookup(rooms, Room) of
+        [{Room, _, _}] ->
+            ets:insert(user_rooms, {Room, Name}),
+            #{<<"state">> => <<"ok">>, <<"info">> => <<"joinedRoom">>};
+        [] ->
+            #{<<"state">> => <<"error">>, <<"info">> => <<"roomNotFound">>}
+    end;
 
-% handle_action(Name, <<"sendMessage">>, #{<<"room">> := Room, <<"message">> := Message}) ->
-%     case ets:lookup(rooms, Room) of
-%         [{Room, _, _}] ->
-%             Members = ets:lookup(user_rooms, Room),
-%             lists:foreach(fun({_Room, Member}) ->
-%                 % Here you would send the message to each member
-%                 io:format("Sending message to ~p: ~p~n", [Member, Message])
-%             end, Members),
-%             {ok, messageSent};
-%         [] ->
-%             {error, roomNotFound}
-%     end;
+handle_action(Name, <<"leaveRoom">>, #{<<"room">> := Room}) ->
+    ets:delete_object(user_rooms, {Room, Name}),
+    #{<<"state">> => <<"ok">>, <<"info">> => <<"leftRoom">>};
+
+handle_action(_, <<"sendMessage">>, #{<<"room">> := Room, <<"message">> := Message}) ->
+    case ets:lookup(rooms, Room) of
+        [{Room, _, _}] ->
+            Members = ets:lookup(user_rooms, Room),
+            lists:foreach(fun({RoomActual, Member}) ->
+                case ets:lookup(userPIDs, Member) of
+                    [{Member, Pid}] ->
+                        io:format("Sending message ~p to ~p~n", [Message,Pid]),
+                        Pid ! {sendMessage, RoomActual, Message};
+                    [] ->
+                        #{<<"state">> => <<"error">>, <<"info">> => <<"noUserFoundInRoom">>}
+                end
+            end, Members),
+            #{<<"state">> => <<"ok">>, <<"info">> => <<"messageSent">>};
+        [] ->
+            #{<<"state">> => <<"error">>, <<"why">> => <<"roomNotFound">>}
+    end;
 
 handle_action(_Name, _Action, _ActionSpecs) ->
     io:format("~p taking unknown action ~p with options ~p ~n", [_Name, _Action, _ActionSpecs]),
-    {error, unknownAction}.
+    #{<<"state">> => <<"error">>, <<"why">> => <<"unknownAction">>}.
+
