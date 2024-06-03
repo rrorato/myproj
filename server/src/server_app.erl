@@ -46,16 +46,15 @@ parse_input(ActionInfo) ->
     ActionInfoParsed = jsx:decode(ActionInfo),
     case is_valid_action_info(ActionInfoParsed) of
         false ->
-            #{<<"state">> => <<"error">>, <<"why">> => <<"badRequest">>};
+            #{<<"state">> => <<"error">>, <<"info">> => <<"badRequest">>};
         true ->
             Name = maps:get(<<"name">>, ActionInfoParsed),
             case ets:lookup(allowedUsers, Name) of
                 [] ->
-                    #{<<"state">> => <<"error">>, <<"why">> => <<"userNotAllowedError">>};
+                    #{<<"state">> => <<"error">>, <<"info">> => <<"userNotAllowedError">>};
                 [_] ->
                     Action = maps:get(<<"action">>, ActionInfoParsed),
                     ActionSpecs = maps:get(<<"actionSpecs">>, ActionInfoParsed),
-                    user_session:start(Name),
                     room_actions:handle_action(Name, Action, ActionSpecs)
             end
     end.
