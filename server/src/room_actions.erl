@@ -41,10 +41,7 @@ handle_action(Name, <<"leaveRoom">>, #{<<"room">> := Room}) ->
 handle_action(_, <<"sendMessage">>, #{<<"room">> := Room, <<"message">> := Message}) ->
     case ets:lookup(rooms, Room) of
         [{Room, _, _}] ->
-            Members = ets:lookup(user_rooms, Room),
-            lists:foreach(fun({_, Member}) ->
-                ets:insert(messages, {Room, Message})
-            end, Members),
+            ets:insert(messages, {Room, Message}),
             utils:build_dict("ok", "messageSent");
         [] ->
             utils:build_dict("error", "roomNotFound")
