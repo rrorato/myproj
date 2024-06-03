@@ -4,8 +4,10 @@
 init() ->
     ets:new(rooms, [named_table, public, set, {keypos, 1}]),
     ets:new(user_rooms, [named_table, public, set]),
-    ets:new(messages, [named_table, public, duplicate_bag]).
+    ets:new(messages, [named_table, public, duplicate_bag]),
+    ets:new(private_messages, [named_table, public, duplicate_bag]).
 
+% room management
 handle_action(Name, <<"createRoom">>, #{<<"room">> := Room}) ->
     io:format("~p created room ~p with options~n", [Name, Room]),
     ets:insert_new(rooms, {Room, Name, []}),
@@ -38,6 +40,7 @@ handle_action(Name, <<"leaveRoom">>, #{<<"room">> := Room}) ->
     ets:delete_object(user_rooms, {Room, Name}),
     utils:build_dict("ok", "leftRoom");
 
+% messages in rooms
 handle_action(_, <<"sendMessage">>, #{<<"room">> := Room, <<"message">> := Message}) ->
     case ets:lookup(rooms, Room) of
         [{Room, _, _}] ->
@@ -60,7 +63,17 @@ handle_action(Name, <<"receiveMessage">>, #{<<"room">> := Room}) ->
         [] ->
             utils:build_dict("error", "roomNotFound")
     end;
-    
+
+% private messages
+handle_action(Sender, <<"sendPrivateMessage">>, #{<<"receiver">> := Receiver, <<"message">> := Message}) ->
+    ets:insert(private_messages, {Sender, Receiver, Message}),
+    utils:build_dict("ok", "privateMessageSent");
+
+handle_action(Receiver, <<"receivePrivateMessage">>, #{<<"sender">> := Sender}) ->
+    Messages = ets:match_object(private_messages, {Sender, Receiver, '_'}),
+    #{<<"state">> => <<"ok">>, <<"messages">> => lists:map(fun({_, _, Message}) -> Message end, Messages)};
+
+% other
 handle_action(_Name, _Action, _ActionSpecs) ->
     io:format("~p taking unknown action ~p with options ~p ~n", [_Name, _Action, _ActionSpecs]),
     utils:build_dict("error", "unknownAction").
